@@ -1,0 +1,14 @@
+__pycache__
+settings.ini
+test.py
+db
+logs
+.cache
+test.txt
+test2.py
+spotify.ini
+spotifyClient.txt
+Prompt.bat
+new_main.py
+cogs/moderation
+cogs/music/guild.txt
