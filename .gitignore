@@ -5,6 +5,7 @@ db
 logs
 .cache
 test.txt
+test1.py
 test2.py
 spotify.ini
 spotifyClient.txt

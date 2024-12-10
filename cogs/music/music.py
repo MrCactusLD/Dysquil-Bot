@@ -7,6 +7,8 @@ from .utils.utils import search_audio
 from colorama import Fore
 import random
 import logging
+import time
+from pprint import pprint
 
 PAGINATION = 5
 
@@ -24,32 +26,32 @@ class Messages():
 
 # Button class for songs in queue
 class QueueUi(discord.ui.View):
+        INACTIVE= 30
         def __init__(self, ListOfSongs,embed):
             super().__init__()
             self.value = None
             self.songs= ListOfSongs
             self.edit = False
             self.embed = embed
-            self.message = None
             self.page = 1
             self.songs = ListOfSongs
+            self.button_divider.disabled = True
 
-        async def DisableAllButtons(self):
+        def DisableAllButtons(self):
             self.button_next.disabled = True
             self.button_previous.disabled = True 
+            self.button_divider.disabled = True
             return self 
 
-        @discord.ui.button(label= " ",style=discord.ButtonStyle.primary, emoji="⏸")
-        async def button_previous(self,button:discord.ui.button,interaction : discord.Interaction):        
-            self.button_previous.disabled = True
-
-        @discord.ui.button(label= " ",style=discord.ButtonStyle.primary,emoji="⏩")
-        async def button_next(self,button:discord.ui.button,interaction : discord.Interaction):
+        @discord.ui.button(label= " ",style=discord.ButtonStyle.primary,emoji="⏪")
+        async def button_previous(self,button:discord.ui.button,interaction : discord.Interaction):
             
-            page = self.page + 1
-
+            page = self.page - 1
+            self.page = self.page - 1
             total_pages = (len(self.songs) + PAGINATION - 1) // PAGINATION
             if page > total_pages or page <= 0:
+                self.page = self.page + 1 
+                await button.response.defer()
                 return
             start_index = (page - 1) * PAGINATION
             end_index = page * PAGINATION
@@ -64,9 +66,40 @@ class QueueUi(discord.ui.View):
 
             embed.add_field(name="Page Number ->",value=str(page) + "/" + str(total_pages))
             await self.UpdateMessage(embed=embed, view= self)
+            await button.response.defer()
+
+        @discord.ui.button(label= "|_|",style=discord.ButtonStyle.primary)
+        async def button_divider(self,button:discord.ui.button,interaction : discord.Interaction):        
+            self.button_divider.disabled = True
+            await button.response.defer()
+
+        @discord.ui.button(label= " ",style=discord.ButtonStyle.primary,emoji="⏩")
+        async def button_next(self,button:discord.ui.button,interaction : discord.Interaction):
+            
+            page = self.page + 1
+            self.page = self.page + 1
+            total_pages = (len(self.songs) + PAGINATION - 1) // PAGINATION
+            if page > total_pages or page <= 0:
+                self.page = self.page - 1
+                await button.response.defer()
+                return
+            start_index = (page - 1) * PAGINATION
+            end_index = page * PAGINATION
+            page_data = self.songs[start_index:end_index]
+            i = start_index
+            embed = discord.Embed(title = "Songs in queue: "+ str(len(self.songs)),color= discord.Color.purple())
+            for x in page_data:
+                embed.add_field(name= "id:", value= i+1,inline=True)
+                embed.add_field(name= "Song name:", value= x[0][0]["name"],inline=True)
+                embed.add_field(name= "", value= "",inline=False) 
+                i = i+1
+
+            embed.add_field(name="Page Number ->",value=str(page) + "/" + str(total_pages))
+            await self.UpdateMessage(embed=embed, view= self)
+            await button.response.defer()
 
         async def UpdateMessage(self,embed,view):
-            self.message.edit(embed=embed, view=view)
+            await self.message.edit(embed=embed, view=view)
 
 # Class that stores button styles and buttons for music player. 
 class PlayerUi(discord.ui.View):
@@ -374,7 +407,6 @@ class MusicCog(commands.Cog):
                     continue
 
                 page = 1
-
                 total_pages = (len(x.music_queue) + PAGINATION - 1) // PAGINATION
                 if page > total_pages or page <= 0:
                     await interaction.response.send_message("No Songs in queue!")
@@ -384,16 +416,20 @@ class MusicCog(commands.Cog):
                 page_data = x.music_queue[start_index:end_index]
                 i = start_index
                 embed = discord.Embed(title = "Songs in queue: "+ str(len(x.music_queue)),color= discord.Color.purple())
-                for x in page_data:
+                for j in page_data:
                     embed.add_field(name= "id:", value= i+1,inline=True)
-                    embed.add_field(name= "Song name:", value= x[0][0]["name"],inline=True)
+                    embed.add_field(name= "Song name:", value= j[0][0]["name"],inline=True)
                     embed.add_field(name= "", value= "",inline=False) 
                     i = i+1
 
                 embed.add_field(name="Page Number ->",value=str(page) + "/" + str(total_pages))
                 view = QueueUi(ListOfSongs=x.music_queue , embed=embed)
-                message = await interaction.response.send(embed=embed,view=view)
+                await interaction.response.send_message(embed=embed,view=view)
+                message = await interaction.original_response()
                 view.message = message
+
+        else:
+            await interaction.response.send_message("No songs :/")
     
     @app_commands.command(name="shuffle", description="shuffles the current list of the songs")
     async def _shuffle(self, interaction:discord.Interaction):

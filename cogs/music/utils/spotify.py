@@ -4,10 +4,17 @@ from datetime import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
+"""
+Honestly I have no Idea what I did in thise file, and am too tired to figure out and comment out what anything does.
+And when I created this, I was to lazy to comment it.
+
+Might aswell put it on my TODO list ¯\_(ツ)_/¯
+Oh well...
+"""
+
 global scope,file
 scope = "user-library-read"
 file = 'spotifyClient.txt'
-
 
 class Spotify():
     def __init__(self):
@@ -29,9 +36,6 @@ class Spotify():
     def get_id(self):
         with open(file,'r') as fp:
             Lines = fp.readlines()
-            print(f'{Lines[0][:-2]}\n{Lines[1][:-2]}\n{Lines[2]}')
-
-
             self.client_id = Lines[0][:-1]
             self.client_secret = Lines[1][:-1]
             self.uri = Lines[2]

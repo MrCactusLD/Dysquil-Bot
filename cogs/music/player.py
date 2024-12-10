@@ -1,6 +1,6 @@
 import time
 from discord import FFmpegPCMAudio,Interaction, Embed,Color
-from .utils.utils import  get_yt_song,get_spotify_link
+from .utils.utils import  get_stream_url,get_stream_search
 import logging
 
 
@@ -39,15 +39,6 @@ class Player:
         }
         logging.info("Player has been initialised, guild = {0}, id = {1} ".format(self.guild,self.id))
 
-    def add_songs(self,Songs:list):
-        pass
-
-    """def play_song(self):
-        try:
-            self.vc.play(FFmpegPCMAudio(source=url,**(self.FFMPEG_OPTIONS)), after= lambda e:self.player())   
-        except Exception as e:
-            logging.error(f"Error during playback: {e}")"""
-
     def player(self):
         """
         Player method that is playing music in an `~.self.vc` that was instanced by `Player.start()` method.\n
@@ -70,38 +61,53 @@ class Player:
                     break
         
         if len(self.music_queue) != 0:
-            self.inactive = 0
-            self.dead = False
-            if self.music_queue[0][0][0]["type"] == "sp": 
-                track = self.music_queue[0][0][0]
-                self.music_queue[0][0][0] = get_spotify_link(f'{track["artist"]} - {track["name"]}')[0]
-                url = self.music_queue[0][0][0]["url"]
-            elif self.music_queue[0][0][0]["id"] == "Custom":
-                url = self.music_queue[0][0][0]["url"]
-            else:
-                url = get_yt_song(id = (self.music_queue[0][0][0]["id"]))
-            if url is None:
-                self.music_queue.pop(0)
-                self.player()
-                channel = self.bot.get_channel(self.channel_id)
-                channel.send("Song couldn't be played, Skipping")
-                logging.error("Player instance couldn't retrieve a url to play, guild = {0}, id = {1} ".format(self.guild,self.id))
-            else: 
-                if self.music_queue[0][0][0]["name"] != "Custom":
-                    self.embed = Embed(title = "Now playing ->",color= Color.purple()).set_footer(icon_url= self.music_queue[0][1], text = "Requested by: "+self.music_queue[0][2])
-                    self.embed.add_field(name= "Song name:", value=self.music_queue[0][0][0]["name"])
-                    self.embed.add_field(name= "Song Length:", value=self.music_queue[0][0][0]["length"])
-                    self.embed.add_field(name= "Song link:", value= "https://www.youtube.com/watch?v=" + self.music_queue[0][0][0]["id"])
-                    self.embed.set_image(url=self.music_queue[0][0][0]["thumbnail"])
-                    logging.info("Player instance is playing a song, guild = {0}, id = {1}, song_name = {2}".format(self.guild,self.id,self.music_queue[0][0][0]["name"]))
-                self.music_queue.pop(0)
-                if len(self.music_queue) >= 1:
-                    self.embed.add_field(name="Remaining songs in queue:", value= len(self.music_queue))
-                self.send_embed = True
-                try:
-                    self.vc.play(FFmpegPCMAudio(source=url,**(self.FFMPEG_OPTIONS)), after= lambda e:self.player())   
-                except Exception as e:
-                    logging.error(f"Error during playback: {e}")
+            
+            try:
+                #Put an entire loop in try statement so if someting brakes, the bot can be released easily without causing trouble and getting stuck in a non playable state :/
+                #It will do for now :/
+                self.inactive = 0
+                self.dead = False
+                if self.music_queue[0][0][0]["type"] == "sp": 
+                    track = self.music_queue[0][0][0]
+                    self.music_queue[0][0][0] = get_stream_search(f'{track["artist"]} - {track["name"]}')
+                    url = self.music_queue[0][0][0]["url"]
+                elif self.music_queue[0][0][0]["url"] == "Custom":
+                    track = self.music_queue[0][0][0]
+                    self.music_queue[0][0][0]["url"] = get_stream_url(track["id"])
+                    url = self.music_queue[0][0][0]["url"]
+                elif self.music_queue[0][0][0]["id"] == "Custom":
+                    url = self.music_queue[0][0][0]["url"]
+                else:
+                    url = get_stream_url(id = (self.music_queue[0][0][0]["id"]))
+                if url is None:
+                    self.music_queue.pop(0)
+                    self.player()
+                    channel = self.bot.get_channel(self.channel_id)
+                    channel.send("Song couldn't be played, Skipping")
+                    logging.error("Player instance couldn't retrieve a url to play, guild = {0}, id = {1} ".format(self.guild,self.id))
+                else: 
+                    if self.music_queue[0][0][0]["name"] != "Custom":
+                        self.embed = Embed(title = "Now playing ->",color= Color.purple()).set_footer(icon_url= self.music_queue[0][1], text = "Requested by: "+self.music_queue[0][2])
+                        self.embed.add_field(name= "Song name:", value=self.music_queue[0][0][0]["name"])
+                        self.embed.add_field(name= "Song Length:", value=self.music_queue[0][0][0]["length"])
+                        self.embed.add_field(name= "Song link:", value= "https://www.youtube.com/watch?v=" + self.music_queue[0][0][0]["id"])
+                        self.embed.set_image(url=self.music_queue[0][0][0]["thumbnail"])
+                        logging.info("Player instance is playing a song, guild = {0}, id = {1}, song_name = {2}".format(self.guild,self.id,self.music_queue[0][0][0]["name"]))
+                    self.music_queue.pop(0)
+                    if len(self.music_queue) >= 1:
+                        self.embed.add_field(name="Remaining songs in queue:", value= len(self.music_queue))
+                    self.send_embed = True
+                    try:
+                        self.vc.play(FFmpegPCMAudio(source=url,**(self.FFMPEG_OPTIONS)), after= lambda e:self.player())   
+                    except Exception as e:
+                        logging.error(f"Error during playback: {e}")
+            except Exception as e:
+                logging.info(e)
+                logging.info("An Error has occured!")
+                logging.info("Resetting the bot to original state :/")
+                self.dead = True     
+                self.destroy = True
+                return True
 
     async def controller(self):
         if self.dead == True:

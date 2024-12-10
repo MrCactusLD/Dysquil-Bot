@@ -1,15 +1,12 @@
 import validators
 import httpx
-from pytube import YouTube,Search,Playlist
 import yt_dlp
-from pytube.exceptions import VideoUnavailable, AgeRestrictedError
-import logging
 import datetime
 from requests import get
 from .spotify import Spotify
-
-YT_PRFX = "https://www.youtube.com"
-YT_IMG_PRFX = "https://www.youtube.com"
+from youtubesearchpython import VideosSearch,Playlist,Video
+#༼ つ ◕_◕ ༽つ
+#Cool emoji right? 
 YTDLP_OPTIONS = {
                 'format': 'bestaudio/best',
                 'extractaudio': True,
@@ -29,7 +26,7 @@ YTDLP_OPTIONS = {
 
 def is_audio(url:str):
     """
-    A function that checks whether a giver url is in audio format.\n
+    \nA function that checks whether a giver url is in audio format.\n
     Args:
     - `url:str`
     """
@@ -41,7 +38,12 @@ def is_audio(url:str):
         return False
 
 def identify(url:str):
-    ## This is meant for signature check, but currently is only checking only url -_-
+    """
+    \nA Function that indetifies the source of the url
+    Args:
+    `url:str`
+    """
+    ## This is meant for signature check, but currently is checking only url -_-
     if "youtube" in url.lower() or "youtu.be" in url.lower():
         return "Youtube"
     elif "spotify" in url.lower():
@@ -51,63 +53,87 @@ def identify(url:str):
     else: return False
 
 def Youtube_Scrape(url:str):
+    """
+    \nGets information about the video/song if the song was identified as Youtube
+    Args:
+    - `url:str`
+
+    \nReturns `list` with one item inside containing a `dict` of items
+    """
     Songs =[]
-    if "list" in url:
-        Object = Playlist(url).videos
-        for x in Object:
+    if "list" in url and not "music" in url:
+        Search_Obj = Playlist(url).videos
+        for Video_meta in Search_Obj:
             Songs.append({
-                            "id": x.video_id,
-                            "name" : x.title,
-                            "thumbnail":x.thumbnail_url ,
-                            "length": str(datetime.timedelta(seconds=x.length)),
-                            "url":x.watch_url,
+                            "id": Video_meta['id'],
+                            "name" : Video_meta['title'],
+                            "thumbnail":Video_meta['thumbnails'][-1]['url'] ,
+                            "length": Video_meta['duration'],
+                            "url":"Custom",
                             "type":"yt"
                         })
-
+        return Songs
     else:
-        Object = YouTube(url)
+        Video_meta = Video.getInfo(url)
         Songs.append({
-                            "id": Object.video_id,
-                            "name" : Object.title,
-                            "thumbnail":Object.thumbnail_url ,
-                            "length": str(datetime.timedelta(seconds=Object.length)),
-                            "url":Object.watch_url,
+                            "id": Video_meta['id'],
+                            "name" : Video_meta['title'],
+                            "thumbnail":Video_meta['thumbnails'][-1]['url'] ,
+                            "length": str(datetime.timedelta(seconds=int(Video_meta['duration']['secondsText']))),
+                            "url":"Custom",
                             "type":"yt"
                         })
     return Songs
 
+def get_spotify_link(search:str):
+    """
+    \nSearches for a song equivalent on youtube
+    Args:
+    - `search:str`
 
-def Spotify_convert(url):
+    \nReturns `list` with one item inside containing a `dict` of items
+    """
+    search = VideosSearch(search,limit=1) # Searches the url and retrieves a list of songs
+    results = search.result()['result']
+    if len(results) > 0:
+        Video_meta = results[0] # Takes the first one, cause "probably" its the best :/
+        track = {
+                    "id": Video_meta['id'],
+                    "name" : Video_meta['title'],
+                    "thumbnail":Video_meta['thumbnails'][-1]['url'],
+                    "length": Video_meta['duration'],
+                    "url":'spotify',
+                    "type":"sp"
+        }
+        return track
+
+def Spotify_convert(url:str):
+    """
+    \nDoes main handling of converting spotify track/playlist to youtube
+    Args:
+    - `url:str`
+
+    \nReturns a `list` of `dict` containing video meta information needed for further handling.
+    """
     Songs = []
     if 'track' in url:
-        Songs = Spotify().get_spotify_song(url=url)
-        temp = get_spotify_link(f'{Songs[0]["artist"]} - {Songs[0]["name"]}')
-        Songs[0]["length"] = temp[0]["length"]
-        Songs[0]["thumbnail"] = temp[0]["thumbnail"]
+        temp = Spotify().get_spotify_song(url=url)
+        Songs.append(get_spotify_link(f'{temp[0]["artist"]} - {temp[0]["name"]}'))
     elif 'playlist' in url:
         Songs = Spotify().get_spotify_playlist(url=url)
-        
+  
     return Songs
-
-def search(arg:any):
-    global YTDLP_OPTIONS
-    with yt_dlp.YoutubeDL(YTDLP_OPTIONS) as ydl:
-        try:
-            get(arg) 
-        except:
-            video = ydl.extract_info(f"ytsearch:{arg}", download=False)['entries'][0]
-        else:
-            video = ydl.extract_info(arg, download=False)
-        return video
 
 
 async def search_audio(search:str):
     """
-    \nFunction that searches for audio file and retrieves a `list` of `dicts` with information about the given parameter.
-    \nIf the audio file is hosted privately on a server, it will return a `list` of `dicts` containing "Custom" for every parameter except for `~["url"]`
-    \nIf audio file is scrape protected, then it will return `None` 
-    \nArgs:
+    \nFunction that searches for audio files, or a supported url to obtain a song.
+    Args:
     - `search:str`
+
+    \nReturns a `list` of `dict` containing meta information from the attached source.
+    \nReturns `False` if the source is not currently supported.
+    \nReturns `None` if the search contained `0` matches.
     """
 
     Songs = []
@@ -140,77 +166,63 @@ async def search_audio(search:str):
             })
             return Songs
     else:
-        search = Search(search) # Searches the url and retrieves a list of songs
-        results = search.results
+        search = VideosSearch(search,limit=1) # Searches the url and retrieves a list of songs
+        results = search.result()['result']
         if len(results) > 0:
-            result = results[0] # Finds the best match
+            Video_meta = results[0] # Takes the first one, cause "probably" its the best :/
             Songs.append({
-                        "id": result.video_id,
-                        "name" : result.title,
-                        "thumbnail":result.thumbnail_url ,
-                        "length": str(datetime.timedelta(seconds=result.length)),
-                        "url":result.watch_url,
+                        "id": Video_meta['id'],
+                        "name" : Video_meta['title'],
+                        "thumbnail":Video_meta['thumbnails'][-1]['url'] ,
+                        "length": Video_meta['duration'],
+                        "url":get_stream_url(Video_meta['id']),
                         "type":"search"
             })   
             return Songs
         else: 
-            return False
+            #Returns None if there aren't any songs found 
+            return None
 
-def get_link_ytdlp(id):
+def get_stream_search(src:str):
     """
-    Separate function that is here only to extract age restricted urls, since pytube requires login :) .i.
+    \nFunction that searches ytdlp for a song using `ytsearch` method.
+    Args:
+    - `src:str`
+
+    \nReturns a `dict` containing song meta information
+    \nReturns `None` if no tracks were found.
+    \nOnly used from player.py to get spotify links :/
+    """
+    global YTDLP_OPTIONS
+    track = None
+    with yt_dlp.YoutubeDL(YTDLP_OPTIONS) as ydl:
+        try:
+            get(src) 
+        except:
+            video = ydl.extract_info(f"ytsearch:{src}", download=False)['entries'][0]
+        else:
+            video = ydl.extract_info(src, download=False)
+        track = { 
+            'id' : video["id"],
+            'name' : video["title"],
+            'thumbnail': video['thumbnail'],
+            'length' : str(datetime.timedelta(seconds=video['duration'])),
+            'url' : video['url'],
+            'type': 'spotify'
+        }
+        return track
+
+def get_stream_url(id):
+    """
+    \nFunction that searches ytdlp using `id` for precise handling of videos.
+    Args:
+    - `id`
+
+    \nReturns `playUrl:str` - Stream url of the song
     """
     global YTDLP_OPTIONS
     with yt_dlp.YoutubeDL(YTDLP_OPTIONS) as ydl:
         info = ydl.extract_info("https://www.youtube.com/watch?v="+ id, download=False)
         playUrl = info['url']
         return playUrl
-
-def get_spotify_link(search):
-    with yt_dlp.YoutubeDL(YTDLP_OPTIONS) as ydl:
-        try:
-            get(search) 
-        except:
-            video = ydl.extract_info(f"ytsearch:{search}", download=False)['entries'][0]
-        else:
-            video = ydl.extract_info(search, download=False)
-        track = [{
-            "id":video["id"],
-            "name":video["title"],
-            "thumbnail":video["thumbnail"],
-            "length": str(datetime.timedelta(seconds=video["duration"])),
-            "url":video["url"],
-            "type":"sp"
-
-        }]
-        return track
-     
-def get_yt_song(id:str):
-    """
-    Scrapes YouTube video by `id` and retrieves download url.\n
-    Args:
-    `id` - Yotube video id
-    """
-    try:
-        yt = YouTube.from_id(id)
-        str_data = yt.streaming_data["adaptiveFormats"]
-    except AgeRestrictedError:
-        logging.warning("Video was age restricted, trying to get url from yt-dlp ...")
-        songUrl = get_link_ytdlp(id)
-        if songUrl is not None: 
-            logging.info("url extraction was succesfull.")
-            logging.info("url = {} ".format(songUrl))
-            return songUrl
-        else:
-            logging.error("couldn't get the age restricted video.")
-            return None
-    except VideoUnavailable:
-        logging.error("Video was unavailable")
-        return None
-    for x in str_data:
-        if "audioQuality" in x:
-            if x["audioQuality"] == "AUDIO_QUALITY_MEDIUM":
-                logging.debug("Song was recovered succesfully")
-                return x["url"]
-    return None
 
